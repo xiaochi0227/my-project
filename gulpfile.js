@@ -8,7 +8,9 @@ var lazypipe = require('lazypipe');
 var rimraf = require('rimraf');
 var wiredep = require('wiredep').stream;
 var runSequence = require('run-sequence');
-var gutil      = require('gulp-util')
+var gutil      = require('gulp-util');
+var rev = require('gulp-rev'); //- 对文件名加MD5后缀
+var revCollector = require('gulp-rev-collector'); //- 路径替换
 
 var yeoman = {
   app: require('./bower.json').appPath || 'app',
@@ -240,6 +242,15 @@ gulp.task('html', ['jade','coffee','styles'] ,function (cb) {
   runSequence(['jade','coffee','styles'],['evn','copy:static'],cb)
 });
 
+gulp.task('rev',function(){
+  var removeFiles = require('gulp-remove-files');
+  var rename = require("gulp-rename");
+  var revReplace = require('gulp-rev-replace');
+  gulp.src([yeoman.dist + '/rev-manifest.json',yeoman.dist+'/**/*.html'])   //- 读取 rev-manifest.json 文件以及需要进行css名替换的文件
+    .pipe(revCollector())//- 执行文件内js css名的替换
+    .pipe(gulp.dest(yeoman.dist))//- 替换后的文件输出的目录
+})
+
 //js，css min
 gulp.task('client:build', ['html'], function () {
   var jsFilter = $.filter('**/*.js');
@@ -248,6 +259,7 @@ gulp.task('client:build', ['html'], function () {
   return gulp.src(paths.views.main)
     .pipe($.useref({searchPath: [yeoman.app, yeoman.tmp]}))
     .pipe(jsFilter)
+    .pipe(rev())
     .pipe($.ngAnnotate())
     .pipe($.uglify({
       compress: {
@@ -256,9 +268,13 @@ gulp.task('client:build', ['html'], function () {
     }))
     .pipe(jsFilter.restore())
     .pipe(cssFilter)
+    .pipe(rev())
     .pipe($.minifyCss({cache: true}))
     .pipe(cssFilter.restore())
-    .pipe(gulp.dest(yeoman.dist));
+    .pipe(gulp.dest(yeoman.dist))
+    .pipe(rev.manifest())
+    .pipe(gulp.dest(yeoman.dist)) //rev-manifest.json放入dist
+    .on('end', function() {runSequence(['rev']) });
 });
 
 //config 环境替换
